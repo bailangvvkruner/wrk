@@ -77,7 +77,7 @@ LUAJIT_TAG  := v2.1.0-beta3
 LUAJIT_DIR  := $(ODIR)/LuaJIT-$(LUAJIT_TAG)
 
 OPENSSL_REPO := https://github.com/openssl/openssl.git
-OPENSSL_TAG  := OpenSSL_1_1_1i
+OPENSSL_TAG  := openssl-3.6.0
 OPENSSL_DIR  := $(ODIR)/openssl-$(OPENSSL_TAG)
 
 OPENSSL_OPTS = no-shared no-psk no-srp no-dtls no-idea --prefix=$(abspath $(ODIR))
