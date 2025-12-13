@@ -12,15 +12,15 @@ ifeq ($(STATIC),1)
 	# For static linking, we need to link against the actual .a files
 	# Check both lib and lib64 directories for OpenSSL libraries
 	# When WITH_OPENSSL is set, use system OpenSSL libraries
-	STATIC_LIBS := $(abspath $(ODIR))/lib/libluajit-5.1.a
+	STATIC_LIBS := $(CURDIR)/$(ODIR)/lib/libluajit-5.1.a
 ifneq ($(WITH_OPENSSL),)
 	# Use system OpenSSL static libraries
 	STATIC_LIBS += $(WITH_OPENSSL)/lib/libssl.a $(WITH_OPENSSL)/lib/libcrypto.a
 else
 	# Use built OpenSSL static libraries
 	STATIC_LIBS += \
-		$(if $(wildcard $(ODIR)/lib/libssl.a),$(abspath $(ODIR))/lib/libssl.a,$(abspath $(ODIR))/lib64/libssl.a) \
-		$(if $(wildcard $(ODIR)/lib/libcrypto.a),$(abspath $(ODIR))/lib/libcrypto.a,$(abspath $(ODIR))/lib64/libcrypto.a)
+		$(if $(wildcard $(ODIR)/lib/libssl.a),$(CURDIR)/$(ODIR)/lib/libssl.a,$(CURDIR)/$(ODIR)/lib64/libssl.a) \
+		$(if $(wildcard $(ODIR)/lib/libcrypto.a),$(CURDIR)/$(ODIR)/lib/libcrypto.a,$(CURDIR)/$(ODIR)/lib64/libcrypto.a)
 endif
 else
 	BASE_LIBS := -lm -lssl -lcrypto -lpthread
