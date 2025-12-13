@@ -11,9 +11,17 @@ ifeq ($(STATIC),1)
 	LDFLAGS += -static
 	# For static linking, we need to link against the actual .a files
 	# Check both lib and lib64 directories for OpenSSL libraries
-	STATIC_LIBS := $(ODIR)/lib/libluajit-5.1.a \
+	# When WITH_OPENSSL is set, use system OpenSSL libraries
+	STATIC_LIBS := $(ODIR)/lib/libluajit-5.1.a
+ifneq ($(WITH_OPENSSL),)
+	# Use system OpenSSL static libraries
+	STATIC_LIBS += $(WITH_OPENSSL)/lib/libssl.a $(WITH_OPENSSL)/lib/libcrypto.a
+else
+	# Use built OpenSSL static libraries
+	STATIC_LIBS += \
 		$(if $(wildcard $(ODIR)/lib/libssl.a),$(ODIR)/lib/libssl.a,$(ODIR)/lib64/libssl.a) \
 		$(if $(wildcard $(ODIR)/lib/libcrypto.a),$(ODIR)/lib/libcrypto.a,$(ODIR)/lib64/libcrypto.a)
+endif
 else
 	BASE_LIBS := -lm -lssl -lcrypto -lpthread
 	ifeq ($(TARGET),linux)
@@ -101,7 +109,7 @@ LUAJIT_TAG  := v2.1.0-beta3
 LUAJIT_DIR  := $(ODIR)/LuaJIT-$(LUAJIT_TAG)
 
 OPENSSL_REPO := https://github.com/openssl/openssl.git
-OPENSSL_TAG  := openssl-3.6.0
+OPENSSL_TAG  := openssl-3.2.2
 OPENSSL_DIR  := $(ODIR)/openssl-$(OPENSSL_TAG)
 
 OPENSSL_OPTS = no-shared no-psk no-srp no-dtls no-idea --prefix=$(abspath $(ODIR)) --libdir=lib
