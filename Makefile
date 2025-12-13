@@ -7,7 +7,7 @@ TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)
 
 # Set up libraries based on static or dynamic linking
 ifeq ($(STATIC),1)
-	BASE_LIBS := -lpthread -lm -ldl
+	BASE_LIBS := -lpthread -lm
 	LDFLAGS += -static
 	# For static linking, we need to link against the actual .a files
 	# Check both lib and lib64 directories for OpenSSL libraries
