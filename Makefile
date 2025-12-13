@@ -81,6 +81,8 @@ clean:
 $(BIN): $(OBJ)
 	@echo LINK $(BIN)
 ifeq ($(STATIC),1)
+	@echo "STATIC_LIBS: $(STATIC_LIBS)"
+	@echo "LDFLAGS: $(LDFLAGS)"
 	@$(CC) $(LDFLAGS) -o $@ $^ $(STATIC_LIBS) $(BASE_LIBS)
 else
 	@$(CC) $(LDFLAGS) -o $@ $^ -lluajit-5.1 $(BASE_LIBS)
