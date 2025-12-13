@@ -70,26 +70,32 @@ $(ODIR)/%.o : %.c
 	@echo CC $<
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-# Dependencies
+# Dependencies - Using git clone instead of zip/tar.gz files
 
-LUAJIT  := $(notdir $(patsubst %.zip,%,$(wildcard deps/LuaJIT*.zip)))
-OPENSSL := $(notdir $(patsubst %.tar.gz,%,$(wildcard deps/openssl*.tar.gz)))
+LUAJIT_REPO := https://github.com/LuaJIT/LuaJIT.git
+LUAJIT_TAG  := v2.1.0-beta3
+LUAJIT_DIR  := $(ODIR)/LuaJIT-$(LUAJIT_TAG)
+
+OPENSSL_REPO := https://github.com/openssl/openssl.git
+OPENSSL_TAG  := OpenSSL_1_1_1i
+OPENSSL_DIR  := $(ODIR)/openssl-$(OPENSSL_TAG)
 
 OPENSSL_OPTS = no-shared no-psk no-srp no-dtls no-idea --prefix=$(abspath $(ODIR))
 
-$(ODIR)/$(LUAJIT): deps/$(LUAJIT).zip | $(ODIR)
-	echo $(LUAJIT)
-	@unzip -nd $(ODIR) $<
+$(LUAJIT_DIR): | $(ODIR)
+	@echo "Cloning LuaJIT $(LUAJIT_TAG) from GitHub..."
+	@git clone --depth 1 --branch $(LUAJIT_TAG) $(LUAJIT_REPO) $@
 
-$(ODIR)/$(OPENSSL): deps/$(OPENSSL).tar.gz | $(ODIR)
-	@tar -C $(ODIR) -xf $<
+$(OPENSSL_DIR): | $(ODIR)
+	@echo "Cloning OpenSSL $(OPENSSL_TAG) from GitHub..."
+	@git clone --depth 1 --branch $(OPENSSL_TAG) $(OPENSSL_REPO) $@
 
-$(ODIR)/lib/libluajit-5.1.a: $(ODIR)/$(LUAJIT)
+$(ODIR)/lib/libluajit-5.1.a: $(LUAJIT_DIR)
 	@echo Building LuaJIT...
 	@$(MAKE) -C $< PREFIX=$(abspath $(ODIR)) BUILDMODE=static install
 	@cd $(ODIR)/bin && ln -s luajit-2.1.0-beta3 luajit
 
-$(ODIR)/lib/libssl.a: $(ODIR)/$(OPENSSL)
+$(ODIR)/lib/libssl.a: $(OPENSSL_DIR)
 	@echo Building OpenSSL...
 	@$(SHELL) -c "cd $< && ./config $(OPENSSL_OPTS)"
 	@$(MAKE) -C $< depend
