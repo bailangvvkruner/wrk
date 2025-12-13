@@ -1,16 +1,32 @@
+# Static compilation support
+STATIC ?= 0
+
 CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT
-LIBS    := -lm -lssl -lcrypto -lpthread
 
 TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)
 
+# Set up libraries based on static or dynamic linking
+ifeq ($(STATIC),1)
+	BASE_LIBS := -lpthread -lm -ldl
+	LDFLAGS += -static
+	# For static linking, we need to link against the actual .a files
+	STATIC_LIBS := $(ODIR)/lib/libluajit-5.1.a $(ODIR)/lib/libssl.a $(ODIR)/lib/libcrypto.a
+else
+	BASE_LIBS := -lm -lssl -lcrypto -lpthread
+	ifeq ($(TARGET),linux)
+		BASE_LIBS += -ldl
+	endif
+	STATIC_LIBS :=
+endif
+
+# Target-specific adjustments
 ifeq ($(TARGET), sunos)
 	CFLAGS += -D_PTHREADS -D_POSIX_C_SOURCE=200112L
-	LIBS   += -lsocket
+	BASE_LIBS += -lsocket
 else ifeq ($(TARGET), darwin)
 	export MACOSX_DEPLOYMENT_TARGET = $(shell sw_vers -productVersion)
 else ifeq ($(TARGET), linux)
 	CFLAGS  += -D_POSIX_C_SOURCE=200112L -D_BSD_SOURCE -D_DEFAULT_SOURCE
-	LIBS    += -ldl
 	LDFLAGS += -Wl,-E
 else ifeq ($(TARGET), freebsd)
 	CFLAGS  += -D_DECLARE_C99_LDBL_MATH
@@ -24,7 +40,6 @@ VER  ?= $(shell git describe --tags --always --dirty)
 
 ODIR := obj
 OBJ  := $(patsubst %.c,$(ODIR)/%.o,$(SRC)) $(ODIR)/bytecode.o $(ODIR)/version.o
-LIBS := -lluajit-5.1 $(LIBS)
 
 DEPS    :=
 CFLAGS  += -I$(ODIR)/include
@@ -42,7 +57,7 @@ ifneq ($(WITH_OPENSSL),)
 	CFLAGS  += -I$(WITH_OPENSSL)/include
 	LDFLAGS += -L$(WITH_OPENSSL)/lib
 else
-	DEPS += $(ODIR)/lib/libssl.a
+	DEPS += $(ODIR)/lib/libssl.a $(ODIR)/lib/libcrypto.a
 endif
 
 all: $(BIN)
@@ -52,7 +67,11 @@ clean:
 
 $(BIN): $(OBJ)
 	@echo LINK $(BIN)
-	@$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+ifeq ($(STATIC),1)
+	@$(CC) $(LDFLAGS) -o $@ $^ $(STATIC_LIBS) $(BASE_LIBS)
+else
+	@$(CC) $(LDFLAGS) -o $@ $^ -lluajit-5.1 $(BASE_LIBS)
+endif
 
 $(OBJ): config.h Makefile $(DEPS) | $(ODIR)
 
@@ -95,13 +114,14 @@ $(ODIR)/lib/libluajit-5.1.a: $(LUAJIT_DIR)
 	@$(MAKE) -C $< PREFIX=$(abspath $(ODIR)) BUILDMODE=static install
 	@cd $(ODIR)/bin && ln -s luajit-2.1.0-beta3 luajit
 
-$(ODIR)/lib/libssl.a: $(OPENSSL_DIR)
+$(ODIR)/lib/libssl.a $(ODIR)/lib/libcrypto.a: $(OPENSSL_DIR)
 	@echo Building OpenSSL...
 	@$(SHELL) -c "cd $< && ./config $(OPENSSL_OPTS)"
 	@$(MAKE) -C $< depend
 	@$(MAKE) -C $<
 	@$(MAKE) -C $< install_sw
-	@touch $@
+	@touch $(ODIR)/lib/libssl.a
+	@touch $(ODIR)/lib/libcrypto.a
 
 # ------------
 
