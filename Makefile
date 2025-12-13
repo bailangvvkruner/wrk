@@ -6,21 +6,22 @@ CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT
 TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)
 
 # Set up libraries based on static or dynamic linking
+# $(CURDIR) 包含了结尾斜杠
 ifeq ($(STATIC),1)
 	BASE_LIBS := -lpthread -lm
 	LDFLAGS += -static
 	# For static linking, we need to link against the actual .a files
 	# Check both lib and lib64 directories for OpenSSL libraries
 	# When WITH_OPENSSL is set, use system OpenSSL libraries
-	STATIC_LIBS := $(CURDIR)/$(ODIR)/lib/libluajit-5.1.a
+	STATIC_LIBS := $(shell cd $(ODIR) && pwd)/lib/libluajit-5.1.a
 ifneq ($(WITH_OPENSSL),)
 	# Use system OpenSSL static libraries
 	STATIC_LIBS += $(WITH_OPENSSL)/lib/libssl.a $(WITH_OPENSSL)/lib/libcrypto.a
 else
 	# Use built OpenSSL static libraries
 	STATIC_LIBS += \
-		$(if $(wildcard $(ODIR)/lib/libssl.a),$(CURDIR)/$(ODIR)/lib/libssl.a,$(CURDIR)/$(ODIR)/lib64/libssl.a) \
-		$(if $(wildcard $(ODIR)/lib/libcrypto.a),$(CURDIR)/$(ODIR)/lib/libcrypto.a,$(CURDIR)/$(ODIR)/lib64/libcrypto.a)
+		$(if $(wildcard $(ODIR)/lib/libssl.a),$(shell cd $(ODIR) && pwd)/lib/libssl.a,$(shell cd $(ODIR) && pwd)/lib64/libssl.a) \
+		$(if $(wildcard $(ODIR)/lib/libcrypto.a),$(shell cd $(ODIR) && pwd)/lib/libcrypto.a,$(shell cd $(ODIR) && pwd)/lib64/libcrypto.a)
 endif
 else
 	BASE_LIBS := -lm -lssl -lcrypto -lpthread
