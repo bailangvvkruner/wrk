@@ -10,7 +10,10 @@ ifeq ($(STATIC),1)
 	BASE_LIBS := -lpthread -lm -ldl
 	LDFLAGS += -static
 	# For static linking, we need to link against the actual .a files
-	STATIC_LIBS := $(ODIR)/lib/libluajit-5.1.a $(ODIR)/lib/libssl.a $(ODIR)/lib/libcrypto.a
+	# Check both lib and lib64 directories for OpenSSL libraries
+	STATIC_LIBS := $(ODIR)/lib/libluajit-5.1.a \
+		$(if $(wildcard $(ODIR)/lib/libssl.a),$(ODIR)/lib/libssl.a,$(ODIR)/lib64/libssl.a) \
+		$(if $(wildcard $(ODIR)/lib/libcrypto.a),$(ODIR)/lib/libcrypto.a,$(ODIR)/lib64/libcrypto.a)
 else
 	BASE_LIBS := -lm -lssl -lcrypto -lpthread
 	ifeq ($(TARGET),linux)
@@ -43,7 +46,8 @@ OBJ  := $(patsubst %.c,$(ODIR)/%.o,$(SRC)) $(ODIR)/bytecode.o $(ODIR)/version.o
 
 DEPS    :=
 CFLAGS  += -I$(ODIR)/include
-LDFLAGS += -L$(ODIR)/lib
+# Add both lib and lib64 directories for library search
+LDFLAGS += -L$(ODIR)/lib -L$(ODIR)/lib64
 
 ifneq ($(WITH_LUAJIT),)
 	CFLAGS  += -I$(WITH_LUAJIT)/include
@@ -57,6 +61,7 @@ ifneq ($(WITH_OPENSSL),)
 	CFLAGS  += -I$(WITH_OPENSSL)/include
 	LDFLAGS += -L$(WITH_OPENSSL)/lib
 else
+	# OpenSSL may install to lib or lib64, check both
 	DEPS += $(ODIR)/lib/libssl.a $(ODIR)/lib/libcrypto.a
 endif
 
@@ -99,7 +104,7 @@ OPENSSL_REPO := https://github.com/openssl/openssl.git
 OPENSSL_TAG  := openssl-3.6.0
 OPENSSL_DIR  := $(ODIR)/openssl-$(OPENSSL_TAG)
 
-OPENSSL_OPTS = no-shared no-psk no-srp no-dtls no-idea --prefix=$(abspath $(ODIR))
+OPENSSL_OPTS = no-shared no-psk no-srp no-dtls no-idea --prefix=$(abspath $(ODIR)) --libdir=lib
 
 $(LUAJIT_DIR): | $(ODIR)
 	@echo "Cloning LuaJIT $(LUAJIT_TAG) from GitHub..."
