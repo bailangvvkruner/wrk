@@ -95,7 +95,7 @@ $(ODIR):
 
 $(ODIR)/bytecode.c: src/wrk.lua $(DEPS)
 	@echo LUAJIT $<
-	@$(SHELL) -c 'PATH="$(ODIR)/bin:$(PATH)" luajit -b "$<" "$(ODIR)/$@"'
+	@$(SHELL) -c 'PATH="$(ODIR)/bin:$(PATH)" luajit -b "$<" "$@"'
 
 $(ODIR)/version.o:
 	@echo 'const char *VERSION="$(VER)";' | $(CC) -xc -c -o $@ -
