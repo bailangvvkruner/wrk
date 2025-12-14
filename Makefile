@@ -12,15 +12,15 @@ ifeq ($(STATIC),1)
 	# For static linking, we need to link against the actual .a files
 	# Check both lib and lib64 directories for OpenSSL libraries
 	# When WITH_OPENSSL is set, use system OpenSSL libraries
-	STATIC_LIBS := ./obj/lib/libluajit-5.1.a
+STATIC_LIBS := $(ODIR)/lib/libluajit-5.1.a
 ifneq ($(WITH_OPENSSL),)
 	# Use system OpenSSL static libraries
 	STATIC_LIBS += $(WITH_OPENSSL)/lib/libssl.a $(WITH_OPENSSL)/lib/libcrypto.a
 else
 	# Use built OpenSSL static libraries
 	STATIC_LIBS += \
-		$(if $(wildcard obj/lib/libssl.a),./obj/lib/libssl.a,./obj/lib64/libssl.a) \
-		$(if $(wildcard obj/lib/libcrypto.a),./obj/lib/libcrypto.a,./obj/lib64/libcrypto.a)
+		$(if $(wildcard $(ODIR)/lib/libssl.a),$(ODIR)/lib/libssl.a,$(ODIR)/lib64/libssl.a) \
+		$(if $(wildcard $(ODIR)/lib/libcrypto.a),$(ODIR)/lib/libcrypto.a,$(ODIR)/lib64/libcrypto.a)
 endif
 else
 	BASE_LIBS := -lm -lssl -lcrypto -lpthread
@@ -95,7 +95,7 @@ $(ODIR):
 
 $(ODIR)/bytecode.c: src/wrk.lua $(DEPS)
 	@echo LUAJIT $<
-	@$(SHELL) -c 'PATH="obj/bin:$(PATH)" luajit -b "$(CURDIR)/$<" "$(CURDIR)/$@"'
+	@$(SHELL) -c 'PATH="$(ODIR)/bin:$(PATH)" luajit -b "$<" "$(ODIR)/$@"'
 
 $(ODIR)/version.o:
 	@echo 'const char *VERSION="$(VER)";' | $(CC) -xc -c -o $@ -
