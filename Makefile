@@ -5,6 +5,8 @@ CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT
 
 TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)
 
+ODIR := obj
+
 # Set up libraries based on static or dynamic linking
 ifeq ($(STATIC),1)
 	BASE_LIBS := -lpthread -lm
@@ -48,8 +50,6 @@ SRC  := wrk.c net.c ssl.c aprintf.c stats.c script.c units.c \
 		ae.c zmalloc.c http_parser.c
 BIN  := wrk
 VER  ?= $(shell git describe --tags --always --dirty)
-
-ODIR := obj
 OBJ  := $(patsubst %.c,$(ODIR)/%.o,$(SRC)) $(ODIR)/bytecode.o $(ODIR)/version.o
 
 DEPS    :=
