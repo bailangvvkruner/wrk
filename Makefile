@@ -5,8 +5,6 @@ CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT
 
 TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)
 
-ODIR := obj
-
 # Set up libraries based on static or dynamic linking
 ifeq ($(STATIC),1)
 	BASE_LIBS := -lpthread -lm
@@ -14,15 +12,15 @@ ifeq ($(STATIC),1)
 	# For static linking, we need to link against the actual .a files
 	# Check both lib and lib64 directories for OpenSSL libraries
 	# When WITH_OPENSSL is set, use system OpenSSL libraries
-STATIC_LIBS := $(ODIR)/lib/libluajit-5.1.a
+	STATIC_LIBS := ./obj/lib/libluajit-5.1.a
 ifneq ($(WITH_OPENSSL),)
 	# Use system OpenSSL static libraries
 	STATIC_LIBS += $(WITH_OPENSSL)/lib/libssl.a $(WITH_OPENSSL)/lib/libcrypto.a
 else
 	# Use built OpenSSL static libraries
 	STATIC_LIBS += \
-		$(if $(wildcard $(ODIR)/lib/libssl.a),$(ODIR)/lib/libssl.a,$(ODIR)/lib64/libssl.a) \
-		$(if $(wildcard $(ODIR)/lib/libcrypto.a),$(ODIR)/lib/libcrypto.a,$(ODIR)/lib64/libcrypto.a)
+		$(if $(wildcard obj/lib/libssl.a),./obj/lib/libssl.a,./obj/lib64/libssl.a) \
+		$(if $(wildcard obj/lib/libcrypto.a),./obj/lib/libcrypto.a,./obj/lib64/libcrypto.a)
 endif
 else
 	BASE_LIBS := -lm -lssl -lcrypto -lpthread
@@ -50,6 +48,8 @@ SRC  := wrk.c net.c ssl.c aprintf.c stats.c script.c units.c \
 		ae.c zmalloc.c http_parser.c
 BIN  := wrk
 VER  ?= $(shell git describe --tags --always --dirty)
+
+ODIR := obj
 OBJ  := $(patsubst %.c,$(ODIR)/%.o,$(SRC)) $(ODIR)/bytecode.o $(ODIR)/version.o
 
 DEPS    :=
@@ -95,7 +95,7 @@ $(ODIR):
 
 $(ODIR)/bytecode.c: src/wrk.lua $(DEPS)
 	@echo LUAJIT $<
-	@$(SHELL) -c 'PATH="$(ODIR)/bin:$(PATH)" luajit -b "$<" "$@"'
+	@$(SHELL) -c 'PATH="obj/bin:$(PATH)" luajit -b "$(CURDIR)/$<" "$(CURDIR)/$@"'
 
 $(ODIR)/version.o:
 	@echo 'const char *VERSION="$(VER)";' | $(CC) -xc -c -o $@ -
