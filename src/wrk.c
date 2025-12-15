@@ -3,6 +3,7 @@
 #include "wrk.h"
 #include "script.h"
 #include "main.h"
+#include "distributed.h"
 
 static struct config {
     uint64_t connections;
@@ -16,6 +17,10 @@ static struct config {
     char    *host;
     char    *script;
     SSL_CTX *ctx;
+    bool     server_mode;
+    bool     client_mode;
+    char    *server_port;
+    char    *server_list;
 } cfg;
 
 static struct {
@@ -54,12 +59,18 @@ static void usage() {
            "        --timeout     <T>  Socket/request timeout     \n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
+           "  Distributed mode options:                           \n"
+           "        --server           Run as master server       \n"
+           "        --client           Run as worker client       \n"
+           "    -p, --port        <P>  Port for server mode       \n"
+           "        --servers     <S>  Server list for client mode\n"
+           "                                                      \n"
            "  Numeric arguments may include a SI unit (1k, 1M, 1G)\n"
            "  Time arguments may include a time unit (2s, 2m, 2h)\n");
 }
 
 int main(int argc, char **argv) {
-    char *url, **headers = zmalloc(argc * sizeof(char *));
+    char *url = NULL, **headers = zmalloc(argc * sizeof(char *));
     struct http_parser_url parts = {};
 
     if (parse_args(&cfg, &url, &parts, headers, argc, argv)) {
@@ -67,6 +78,28 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+    // Server mode: start master server
+    if (cfg.server_mode) {
+        printf("Starting wrk master server on port %s\n", cfg.server_port);
+        // In server mode, we need to get configuration from command line
+        // URL and other parameters should be provided
+        if (optind >= argc) {
+            fprintf(stderr, "Server mode requires URL and test parameters\n");
+            usage();
+            exit(1);
+        }
+        char *url = argv[optind];
+        return master_start(cfg.server_port, url, cfg.threads, cfg.connections, 
+                           cfg.duration, cfg.script);
+    }
+
+    // Client mode: connect to master server
+    if (cfg.client_mode) {
+        printf("Starting wrk client, connecting to servers: %s\n", cfg.server_list);
+        return worker_connect(cfg.server_list);
+    }
+
+    // Normal mode (standalone wrk)
     char *schema  = copy_url_part(url, &parts, UF_SCHEMA);
     char *host    = copy_url_part(url, &parts, UF_HOST);
     char *port    = copy_url_part(url, &parts, UF_PORT);
@@ -476,6 +509,10 @@ static struct option longopts[] = {
     { "timeout",     required_argument, NULL, 'T' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
+    { "server",      no_argument,       NULL,  1  },
+    { "client",      no_argument,       NULL,  2  },
+    { "port",        required_argument, NULL, 'p' },
+    { "servers",     required_argument, NULL,  3  },
     { NULL,          0,                 NULL,  0  }
 };
 
@@ -489,7 +526,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lp:rv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -513,15 +550,56 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
                 if (scan_time(optarg, &cfg->timeout)) return -1;
                 cfg->timeout *= 1000;
                 break;
+            case 'p':
+                cfg->server_port = optarg;
+                break;
             case 'v':
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());
                 printf("Copyright (C) 2012 Will Glozer\n");
+                break;
+            case 1:  // --server
+                cfg->server_mode = true;
+                break;
+            case 2:  // --client
+                cfg->client_mode = true;
+                break;
+            case 3:  // --servers
+                cfg->server_list = optarg;
                 break;
             case 'h':
             case '?':
             case ':':
             default:
                 return -1;
+        }
+    }
+
+    // Check for conflicting modes
+    if (cfg->server_mode && cfg->client_mode) {
+        fprintf(stderr, "cannot specify both --server and --client\n");
+        return -1;
+    }
+
+    // Server mode validation
+    if (cfg->server_mode) {
+        if (!cfg->server_port) {
+            fprintf(stderr, "server mode requires --port\n");
+            return -1;
+        }
+        // In server mode, URL is not required
+        return 0;
+    }
+
+    // Client mode validation
+    if (cfg->client_mode) {
+        if (!cfg->server_list) {
+            fprintf(stderr, "client mode requires --servers\n");
+            return -1;
+        }
+        // In client mode, URL is required
+        if (optind == argc) {
+            fprintf(stderr, "client mode requires URL\n");
+            return -1;
         }
     }
 
