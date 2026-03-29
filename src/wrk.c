@@ -1,13 +1,17 @@
 // Copyright (C) 2012 - Will Glozer.  All rights reserved.
 
-#include "wrk.h"
-#include "script.h"
-#include "main.h"
+#define _GNU_SOURCE
+
+#include <pthread.h>
+#include <unistd.h>
 
 #ifdef __linux__
 #include <sched.h>
-#include <unistd.h>
 #endif
+
+#include "wrk.h"
+#include "script.h"
+#include "main.h"
 
 static struct config {
     uint64_t connections;
