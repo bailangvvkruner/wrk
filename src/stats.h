@@ -20,6 +20,8 @@ typedef struct {
     uint64_t limit;
     uint64_t min;
     uint64_t max;
+    long double mean;
+    long double m2;
     uint64_t data[];
 } stats;
 

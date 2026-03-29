@@ -12,6 +12,8 @@ stats *stats_alloc(uint64_t max) {
     stats *s = zcalloc(sizeof(stats) + sizeof(uint64_t) * limit);
     s->limit = limit;
     s->min   = UINT64_MAX;
+    s->mean  = 0.0;
+    s->m2    = 0.0;
     return s;
 }
 
@@ -22,11 +24,20 @@ void stats_free(stats *stats) {
 int stats_record(stats *stats, uint64_t n) {
     if (n >= stats->limit) return 0;
     __sync_fetch_and_add(&stats->data[n], 1);
-    __sync_fetch_and_add(&stats->count, 1);
+
+    uint64_t count = __sync_fetch_and_add(&stats->count, 1) + 1;
+
     uint64_t min = stats->min;
     uint64_t max = stats->max;
     while (n < min) min = __sync_val_compare_and_swap(&stats->min, min, n);
     while (n > max) max = __sync_val_compare_and_swap(&stats->max, max, n);
+
+    long double delta = (long double)n - stats->mean;
+    long double new_mean = stats->mean + delta / count;
+    long double delta2 = (long double)n - new_mean;
+    __sync_bool_compare_and_swap(&stats->mean, stats->mean, new_mean);
+    __sync_bool_compare_and_swap(&stats->m2, stats->m2, stats->m2 + delta * delta2);
+
     return 1;
 }
 
@@ -43,24 +54,13 @@ void stats_correct(stats *stats, int64_t expected) {
 }
 
 long double stats_mean(stats *stats) {
-    if (stats->count == 0) return 0.0;
-
-    uint64_t sum = 0;
-    for (uint64_t i = stats->min; i <= stats->max; i++) {
-        sum += stats->data[i] * i;
-    }
-    return sum / (long double) stats->count;
+    return stats->mean;
 }
 
 long double stats_stdev(stats *stats, long double mean) {
-    long double sum = 0.0;
+    (void)mean;
     if (stats->count < 2) return 0.0;
-    for (uint64_t i = stats->min; i <= stats->max; i++) {
-        if (stats->data[i]) {
-            sum += powl(i - mean, 2) * stats->data[i];
-        }
-    }
-    return sqrtl(sum / (stats->count - 1));
+    return sqrtl(stats->m2 / (stats->count - 1));
 }
 
 long double stats_within_stdev(stats *stats, long double mean, long double stdev, uint64_t n) {

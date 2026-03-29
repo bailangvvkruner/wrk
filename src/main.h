@@ -19,6 +19,10 @@
 #include <sys/time.h>
 #include <sys/uio.h>
 
+#ifdef __linux__
+#include <sched.h>
+#endif
+
 #include "ssl.h"
 #include "aprintf.h"
 #include "stats.h"

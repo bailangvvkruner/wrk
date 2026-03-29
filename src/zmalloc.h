@@ -86,6 +86,21 @@ size_t zmalloc_get_smap_bytes_by_field(char *field, long pid);
 size_t zmalloc_get_memory_size(void);
 void zlibc_free(void *ptr);
 
+typedef struct mempool {
+    void **blocks;
+    size_t block_size;
+    size_t capacity;
+    size_t count;
+    char *chunk;
+    size_t chunk_size;
+    size_t chunk_used;
+} mempool;
+
+mempool *mempool_create(size_t block_size, size_t initial_capacity);
+void *mempool_alloc(mempool *pool);
+void mempool_free(mempool *pool);
+void mempool_reset(mempool *pool);
+
 #ifdef HAVE_DEFRAG
 void zfree_no_tcache(void *ptr);
 void *zmalloc_no_tcache(size_t size);

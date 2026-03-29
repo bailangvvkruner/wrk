@@ -179,11 +179,11 @@ int aeGetFileEvents(aeEventLoop *eventLoop, int fd) {
 
 static void aeGetTime(long *seconds, long *milliseconds)
 {
-    struct timeval tv;
+    struct timespec ts;
 
-    gettimeofday(&tv, NULL);
-    *seconds = tv.tv_sec;
-    *milliseconds = tv.tv_usec/1000;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    *seconds = ts.tv_sec;
+    *milliseconds = ts.tv_nsec / 1000000;
 }
 
 static void aeAddMillisecondsToNow(long long milliseconds, long *sec, long *ms) {

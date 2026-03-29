@@ -10,6 +10,7 @@ static struct config {
     uint64_t threads;
     uint64_t timeout;
     uint64_t pipeline;
+    uint64_t warmup;
     bool     delay;
     bool     dynamic;
     bool     latency;
@@ -52,6 +53,7 @@ static void usage() {
            "    -H, --header      <H>  Add header to request      \n"
            "        --latency          Print latency statistics   \n"
            "        --timeout     <T>  Socket/request timeout     \n"
+           "        --warmup      <T>  Warmup duration            \n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
            "  Numeric arguments may include a SI unit (1k, 1M, 1G)\n"
@@ -103,6 +105,7 @@ int main(int argc, char **argv) {
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t      = &threads[i];
+        t->thread_id   = i;
         t->loop        = aeCreateEventLoop(10 + cfg.connections * 3);
         t->connections = cfg.connections / cfg.threads;
 
@@ -137,6 +140,33 @@ int main(int argc, char **argv) {
     char *time = format_time_s(cfg.duration);
     printf("Running %s test @ %s\n", time, url);
     printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
+
+    if (cfg.warmup > 0) {
+        char *warmup_time = format_time_s(cfg.warmup / 1000);
+        printf("  Warmup for %s...\n", warmup_time);
+        free(warmup_time);
+        sleep(cfg.warmup / 1000);
+
+        for (uint64_t i = 0; i < cfg.threads; i++) {
+            thread *t = &threads[i];
+            t->complete = 0;
+            t->requests = 0;
+            t->bytes = 0;
+            memset(&t->errors, 0, sizeof(errors));
+        }
+
+        memset(statistics.latency, 0, sizeof(stats) + sizeof(uint64_t) * statistics.latency->limit);
+        statistics.latency->min = UINT64_MAX;
+        statistics.latency->mean = 0.0;
+        statistics.latency->m2 = 0.0;
+
+        memset(statistics.requests, 0, sizeof(stats) + sizeof(uint64_t) * statistics.requests->limit);
+        statistics.requests->min = UINT64_MAX;
+        statistics.requests->mean = 0.0;
+        statistics.requests->m2 = 0.0;
+
+        printf("  Starting test...\n");
+    }
 
     uint64_t start    = time_us();
     uint64_t complete = 0;
@@ -202,6 +232,13 @@ int main(int argc, char **argv) {
 void *thread_main(void *arg) {
     thread *thread = arg;
 
+#ifdef __linux__
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(thread->thread_id % sysconf(_SC_NPROCESSORS_ONLN), &cpuset);
+    pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+#endif
+
     char *request = NULL;
     size_t length = 0;
 
@@ -243,12 +280,26 @@ static int connect_socket(thread *thread, connection *c) {
     flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 
+    flags = 1;
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &flags, sizeof(flags));
+
+#ifdef SO_REUSEPORT
+    setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &flags, sizeof(flags));
+#endif
+
+    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
+
+#ifdef TCP_QUICKACK
+    setsockopt(fd, IPPROTO_TCP, TCP_QUICKACK, &flags, sizeof(flags));
+#endif
+
+    int buf_size = SENDBUF;
+    setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &buf_size, sizeof(buf_size));
+    setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &buf_size, sizeof(buf_size));
+
     if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
         if (errno != EINPROGRESS) goto error;
     }
-
-    flags = 1;
-    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
 
     flags = AE_READABLE | AE_WRITABLE;
     if (aeCreateFileEvent(loop, fd, flags, socket_connected, c) == AE_OK) {
@@ -448,9 +499,9 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
 }
 
 static uint64_t time_us() {
-    struct timeval t;
-    gettimeofday(&t, NULL);
-    return (t.tv_sec * 1000000) + t.tv_usec;
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (ts.tv_sec * 1000000ULL) + (ts.tv_nsec / 1000ULL);
 }
 
 static char *copy_url_part(char *url, struct http_parser_url *parts, enum http_parser_url_fields field) {
@@ -474,6 +525,7 @@ static struct option longopts[] = {
     { "header",      required_argument, NULL, 'H' },
     { "latency",     no_argument,       NULL, 'L' },
     { "timeout",     required_argument, NULL, 'T' },
+    { "warmup",      required_argument, NULL, 'W' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
     { NULL,          0,                 NULL,  0  }
@@ -488,8 +540,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->connections = 10;
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
+    cfg->warmup      = DEFAULT_WARMUP_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:W:Lrv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -512,6 +565,10 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
             case 'T':
                 if (scan_time(optarg, &cfg->timeout)) return -1;
                 cfg->timeout *= 1000;
+                break;
+            case 'W':
+                if (scan_time(optarg, &cfg->warmup)) return -1;
+                cfg->warmup *= 1000;
                 break;
             case 'v':
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());

@@ -1,7 +1,12 @@
 # Static compilation support
 STATIC ?= 0
 
-CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT
+# Performance optimization flags
+OPT_FLAGS := -O3 -flto -fomit-frame-pointer -fno-exceptions -fno-asynchronous-unwind-tables
+ARCH_FLAGS := $(shell $(CC) -march=native -E - < /dev/null > /dev/null 2>&1 && echo "-march=native" || echo "")
+
+CFLAGS  += -std=c99 -Wall -D_REENTRANT $(OPT_FLAGS) $(ARCH_FLAGS)
+LDFLAGS += -flto
 
 TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)
 

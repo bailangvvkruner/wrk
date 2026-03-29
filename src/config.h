@@ -1,6 +1,8 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <time.h>
+
 #if defined(__FreeBSD__) || defined(__APPLE__)
 #define HAVE_KQUEUE
 #elif defined(__linux__)

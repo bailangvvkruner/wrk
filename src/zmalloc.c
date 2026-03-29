@@ -399,13 +399,80 @@ size_t zmalloc_get_memory_size(void) {
     size_t len = sizeof(size);
     if (sysctl(mib, 2, &size, &len, NULL, 0) == 0)
         return (size_t)size;
-    return 0L;          /* Failed? */
+    return 0L;
 #else
-    return 0L;          /* Unknown method to get the data. */
+    return 0L;
 #endif
 #else
-    return 0L;          /* Unknown OS. */
+    return 0L;
 #endif
+}
+
+#define MEMPOOL_CHUNK_SIZE (1024 * 1024)
+#define MEMPOOL_ALIGNMENT 16
+
+mempool *mempool_create(size_t block_size, size_t initial_capacity) {
+    mempool *pool = zmalloc(sizeof(mempool));
+    if (!pool) return NULL;
+
+    block_size = (block_size + MEMPOOL_ALIGNMENT - 1) & ~(MEMPOOL_ALIGNMENT - 1);
+
+    pool->block_size = block_size;
+    pool->capacity = initial_capacity > 0 ? initial_capacity : 64;
+    pool->count = 0;
+    pool->blocks = zmalloc(sizeof(void*) * pool->capacity);
+    pool->chunk_size = MEMPOOL_CHUNK_SIZE;
+    pool->chunk = zmalloc(pool->chunk_size);
+    pool->chunk_used = 0;
+
+    if (!pool->blocks || !pool->chunk) {
+        zfree(pool->blocks);
+        zfree(pool->chunk);
+        zfree(pool);
+        return NULL;
+    }
+
+    return pool;
+}
+
+void *mempool_alloc(mempool *pool) {
+    if (!pool) return NULL;
+
+    size_t aligned_size = (pool->block_size + MEMPOOL_ALIGNMENT - 1) & ~(MEMPOOL_ALIGNMENT - 1);
+
+    if (pool->chunk_used + aligned_size > pool->chunk_size) {
+        pool->chunk = zmalloc(pool->chunk_size);
+        pool->chunk_used = 0;
+        if (!pool->chunk) return NULL;
+    }
+
+    void *ptr = pool->chunk + pool->chunk_used;
+    pool->chunk_used += aligned_size;
+
+    if (pool->count >= pool->capacity) {
+        size_t new_capacity = pool->capacity * 2;
+        void **new_blocks = zrealloc(pool->blocks, sizeof(void*) * new_capacity);
+        if (!new_blocks) return NULL;
+        pool->blocks = new_blocks;
+        pool->capacity = new_capacity;
+    }
+
+    pool->blocks[pool->count++] = ptr;
+    return ptr;
+}
+
+void mempool_reset(mempool *pool) {
+    if (!pool) return;
+    pool->count = 0;
+    pool->chunk_used = 0;
+}
+
+void mempool_free(mempool *pool) {
+    if (!pool) return;
+
+    zfree(pool->blocks);
+    zfree(pool->chunk);
+    zfree(pool);
 }
 
 
