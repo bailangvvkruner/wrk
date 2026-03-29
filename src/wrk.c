@@ -4,6 +4,11 @@
 #include "script.h"
 #include "main.h"
 
+#ifdef __linux__
+#include <sched.h>
+#include <unistd.h>
+#endif
+
 static struct config {
     uint64_t connections;
     uint64_t duration;
