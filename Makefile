@@ -2,8 +2,14 @@
 STATIC ?= 0
 
 # Performance optimization flags
+# Use NATIVE=1 to enable -march=native for local builds
+# For Docker builds, leave it empty for better compatibility
 OPT_FLAGS := -O3 -flto -fomit-frame-pointer -fno-exceptions -fno-asynchronous-unwind-tables
-ARCH_FLAGS := $(shell $(CC) -march=native -E - < /dev/null > /dev/null 2>&1 && echo "-march=native" || echo "")
+ifeq ($(NATIVE),1)
+    ARCH_FLAGS := -march=native
+else
+    ARCH_FLAGS :=
+endif
 
 CFLAGS  += -std=c99 -Wall -D_REENTRANT -D_GNU_SOURCE $(OPT_FLAGS) $(ARCH_FLAGS)
 LDFLAGS += -flto
